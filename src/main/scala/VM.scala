@@ -370,11 +370,10 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
 
         val arg = derefp
 
-        if (m.asInstanceOf[MutableMap[Any, Any]].contains(arg))
-          push(new MutableMapAssignable(m.asInstanceOf[MutableMap[Any, Any]], arg))
-        else
-          //problem( apos, s"key not found: $arg" )
-          push(undefined)
+//        if (m.asInstanceOf[MutableMap[Any, Any]].contains(arg))
+        push(new MutableMapAssignable(m.asInstanceOf[MutableMap[Any, Any]], arg))
+//        else
+//          push(undefined)
       case m: collection.Map[_, _] =>
         if (argc != 1)
           problem(apos, "a function application with one argument was expected")
