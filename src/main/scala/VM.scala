@@ -68,6 +68,52 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
     ret = HALT
   }
 
+  def matchString(s: String): Any = {
+    def matches: Boolean = {
+      for (k <- 0 until s.length)
+        if (seq.charAt(scanpos + k) != s.charAt(k))
+          return false
+
+      true
+    }
+
+    val end = scanpos + s.length
+
+    if (end <= seq.length)
+      if (matches)
+        end + 1
+      else
+        Fail
+    else
+      Fail
+  }
+
+  def tabToPosition(n: Int): Any = {
+    if (n < -seq.length || n > seq.length + 1)
+      Fail
+    else {
+      val pos =
+        if (n > 0)
+          n - 1
+        else
+          seq.length - n
+
+      val res =
+        if (scanpos > pos)
+          seq.subSequence(pos, scanpos)
+        else
+          seq.subSequence(scanpos, pos)
+      val (oldseq, oldscanpos) = (seq, scanpos)
+
+      pushChoice(vm => {
+        vm.seq = oldseq
+        vm.scanpos = oldscanpos
+      })
+      scanpos = pos
+      res
+    }
+  }
+
   def getdata = data
 
   def isEmpty = data.isEmpty
@@ -99,7 +145,9 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
 //			case _ => v
 //		}
 
-  def push(item: Any) = data = item :: data
+  def push(item: Any): Unit =
+    if (item == Fail) fail
+    else data = item :: data
 
   def pushChoice(disp: Int): Unit = pushChoice(disp, null)
 
@@ -400,10 +448,8 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
 
 //				println( list, list map (_.getClass) )//dbg
         if (f.applicable(list))
-          f(this, list) match {
-            case Fail => fail
-            case res  => push(res)
-          } else
+          push(f(this, list))
+        else
           problem(pos, "wrong number or type of arguments for native function: " + f)
       case NativeMethod(o, m) =>
         val args = (for (_ <- 1 to argc) yield derefp).reverse.toList //todo: efficiency
@@ -419,21 +465,19 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
       case p: Product => push(p.productElement(derefp.asInstanceOf[Int]))
       case s: String  => push(s.charAt(derefp.asInstanceOf[Int]).toString)
       case f: NativeFunction =>
-        (if (argc == 1)
-           f.asInstanceOf[(VM, Position, List[Position], Any) => Any](this, apos, ps, pop)
-         else if (argc == 0)
-           f.asInstanceOf[(VM, Position, List[Position], Any) => Any](this, apos, ps, ArgList())
-         else {
-           val args = new Array[Any](argc)
+        push(
+          if (argc == 1)
+            f.asInstanceOf[(VM, Position, List[Position], Any) => Any](this, apos, ps, pop)
+          else if (argc == 0)
+            f.asInstanceOf[(VM, Position, List[Position], Any) => Any](this, apos, ps, ArgList())
+          else {
+            val args = new Array[Any](argc)
 
-           for (i <- argc - 1 to 0 by -1)
-             args(i) = pop
+            for (i <- argc - 1 to 0 by -1)
+              args(i) = pop
 
-           f.asInstanceOf[(VM, Position, List[Position], Any) => Any](this, apos, ps, ArgList(args.toIndexedSeq: _*))
-         }) match {
-          case Fail => fail
-          case res  => push(res)
-        }
+            f.asInstanceOf[(VM, Position, List[Position], Any) => Any](this, apos, ps, ArgList(args.toIndexedSeq: _*))
+          })
       case o => problem(fpos, s"not applicable: ${display(o)}")
     }
   }
