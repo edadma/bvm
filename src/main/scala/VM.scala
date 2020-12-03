@@ -5,11 +5,12 @@ import java.lang.reflect.{Method, Modifier}
 
 import scala.math.ScalaNumber
 import scala.annotation.tailrec
-import collection.mutable.{Growable, Shrinkable}
 import scala.collection.immutable.{ArraySeq, TreeMap}
 import scala.collection.mutable.{ArrayBuffer, Map => MutableMap, Seq => MutableSeq}
 import util.parsing.input.Position
 import xyz.hyperreal.lia.{FunctionMap, Math}
+
+import scala.collection.mutable
 
 object VM {
   private val HALT = -1
@@ -37,19 +38,19 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
   protected[bvm] var ret: Int = _
   protected[bvm] var bindings = new ArrayBuffer[Any]
   var trace = false
-  var limit = Int.MaxValue
+  var limit: Int = Int.MaxValue
 
-  protected def set(bits: Int) = (flags & bits) > 0
+  protected def set(bits: Int): Boolean = (flags & bits) > 0
 
-  protected def clear(bits: Int) = (flags & bits) == 0
+  protected def clear(bits: Int): Boolean = (flags & bits) == 0
 
-  protected def prevpos = ptr - 1
+  protected def prevpos: Int = ptr - 1
 
-  protected def nextpos = ptr + 1
+  protected def nextpos: Int = ptr + 1
 
-  protected def previous = seq charAt prevpos
+  protected def previous: Char = seq charAt prevpos
 
-  protected def pushMatchFailChoice =
+  protected def pushMatchFailChoice(): Unit =
     stack.push(ChoicePoint(flags, data, nextpos, MATCH_FAIL, starts, captures, frame, mark, pos, ret, null))
 
   protected def reset(subject: CharSequence, start: Int, init: List[Any]): Unit = {
@@ -114,30 +115,30 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
     }
   }
 
-  def getdata = data
+  def getdata: List[Any] = data
 
-  def isEmpty = data.isEmpty
+  def isEmpty: Boolean = data.isEmpty
 
-  def top =
+  def top: Any =
     if (isEmpty)
       sys.error("stack underflow")
     else
       data.head
 
-  def pop = {
+  def pop: Any = {
     val res = top
 
     data = data.tail
     res
   }
 
-  def derefp = deref(pop)
+  def derefp: Any = deref(pop)
 
-  def derefpi = derefp.asInstanceOf[Int]
+  def derefpi: Int = derefp.asInstanceOf[Int]
 
-  def derefps = derefp.asInstanceOf[String]
+  def derefps: String = derefp.asInstanceOf[String]
 
-  def dereft = deref(top)
+  def dereft: Any = deref(top)
 
 //	def long2bigint( v: Any ) =
 //		v match {
@@ -146,21 +147,21 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
 //		}
 
   def push(item: Any): Unit =
-    if (item == Fail) fail
+    if (item == Fail) fail()
     else data = item :: data
 
   def pushChoice(disp: Int): Unit = pushChoice(disp, null)
 
-  def pushChoice(disp: Int, action: VM => Unit) =
+  def pushChoice(disp: Int, action: VM => Unit): Unit =
     stack push ChoicePoint(flags, data, ptr, ip + disp, starts, captures, frame, mark, pos, ret, action)
 
-  def pushChoice(action: VM => Unit) =
+  def pushChoice(action: VM => Unit): Unit =
     stack push ChoicePoint(flags, data, ptr, VM_STATE, starts, captures, frame, mark, pos, ret, action)
 
-  protected def pushState =
+  protected def pushState(): Unit =
     stack push ChoicePoint(flags, data, ptr, VM_STATE, starts, captures, frame, mark, pos, ret, null)
 
-  protected def choice: Unit = {
+  protected def choice(): Unit = {
     val ChoicePoint(fl, dat, idx, loc, st, caps, frm, mrk, ps, rt, action) =
       stack.pop
 
@@ -179,98 +180,98 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
       action(this)
   }
 
-  protected def state: Unit = {
+  protected def state(): Unit = {
     val curip = ip
 
-    choice
+    choice()
     ip = curip
   }
 
-  protected def stateSameData: Unit = {
+  protected def stateSameData(): Unit = {
     val curdata = data
     val curframe = frame
 
-    state
+    state()
     data = curdata
     frame = curframe
   }
 
-  protected[bvm] def fail: Unit = {
+  protected[bvm] def fail(): Unit = {
     if (trace)
       println("--- fail ---")
 
-    do choice while (ip == VM_STATE)
+    do choice() while (ip == VM_STATE)
 
     if (scan && !anchored && ip == MATCH_FAIL && !peoi) {
-      pushMatchFailChoice
+      pushMatchFailChoice()
       ip = 0
     }
   }
 
   protected def current: Char = seq charAt ptr
 
-  protected def advance = ptr = nextpos
+  protected def advance(): Unit = ptr = nextpos
 
-  protected def reverse = ptr = prevpos
+  protected def reverse(): Unit = ptr = prevpos
 
-  protected def index = ptr
+  protected def index: Int = ptr
 
-  protected def equal(ch: Char) =
+  protected def equal(ch: Char): Boolean =
     (flags & Pattern.CASE_INSENSITIVE) == 0 && current == ch || (flags & Pattern.CASE_INSENSITIVE) > 0 && Character
       .toLowerCase(current) == Character.toLowerCase(ch)
 
   protected def forwardStringMatch(s: String): Unit = {
     var idx = 0
 
-    @tailrec def chars: Unit =
+    @tailrec def chars(): Unit =
       if (idx < s.length) {
         if (!eoi && equal(s.charAt(idx))) {
-          advance
+          advance()
           idx += 1
-          chars
+          chars()
         } else
-          fail
+          fail()
       }
 
-    chars
+    chars()
   }
 
   protected def reverseStringMatch(s: String): Unit = {
     var idx = s.length - 1
 
-    @tailrec def chars: Unit =
+    @tailrec def chars(): Unit =
       if (idx >= 0) {
         if (boi)
-          fail
+          fail()
         else {
-          reverse
+          reverse()
 
           if (equal(s.charAt(idx))) {
             idx -= 1
-            chars
+            chars()
           } else
-            fail
+            fail()
         }
       }
 
-    chars
+    chars()
   }
 
-  protected def eoi =
+  protected def eoi: Boolean =
     if (ptr > seq.length)
       sys.error("ptr is past end of input")
     else
       ptr == seq.length
 
-  protected def peoi = ptr > seq.length
+  protected def peoi: Boolean = ptr > seq.length
 
-  protected def boi =
+  protected def boi: Boolean =
     if (ptr < 0)
       sys.error("ptr is before beginning of input")
     else
       ptr == 0
 
-  protected def dot =
+  protected def dot: Boolean =
     (clear(Pattern.DOTALL) && (set(Pattern.UNIX_LINES) && current != '\n' || clear(Pattern.UNIX_LINES) && !TERMINATOR_CLASS(
       current))) || set(Pattern.DOTALL)
 
@@ -308,12 +309,12 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
             })
           push(r)
         else
-          fail
+          fail()
       case Symbol("<") | Symbol(">") | Symbol("<=") | Symbol(">=") | Symbol("div") =>
         if (Math.predicate(func, l, r))
           push(r)
         else
-          fail
+          fail()
       case Symbol(":") =>
         r match {
           case s: List[Any] => push(l :: s)
@@ -482,7 +483,7 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
     }
   }
 
-  protected def rewrap(objs: List[Any], types: Array[Class[_]]) = {
+  protected def rewrap(objs: List[Any], types: Array[Class[_]]): Seq[Object] = {
     val varargs = types.length > 0 && types(types.length - 1).getName == "scala.collection.Seq"
 
     def wrap(l: List[Any], idx: Int): List[Any] =
@@ -506,7 +507,7 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
     wrap(objs, 0).asInstanceOf[Seq[Object]]
   }
 
-  protected def assignable(objs: List[Any], types: Array[Class[_]]) = {
+  protected def assignable(objs: List[Any], types: Array[Class[_]]): Boolean = {
     val len = objs.length
     val varargs = types.length > 0 && types(types.length - 1).getName == "scala.collection.Seq"
 
@@ -537,7 +538,7 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
     if (start > ptr) new SubSequence(seq, ptr, start)
     else new SubSequence(seq, start, ptr)
 
-  protected def run: Unit = {
+  protected def run(): Unit = {
     var count = 0
 
     while (ip >= 0 && (!trace || count < limit)) {
@@ -581,7 +582,7 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
                 try {
                   push(c.getField(field.name).get(o))
                 } catch {
-                  case e: NoSuchFieldException =>
+                  case _: NoSuchFieldException =>
                     val methods = c.getMethods.toList.filter(m =>
                       m.getName == field.name && (m.getModifiers & Modifier.STATIC) != Modifier.STATIC)
 
@@ -609,13 +610,13 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
           case RepeatLoopInst(disp) =>
             val Repetition(lower, upper, current) = pop
 
-            def iterate = push(Repetition(lower, upper, current + 1))
+            def iterate(): Unit = push(Repetition(lower, upper, current + 1))
 
             if (current < lower)
-              iterate
+              iterate()
             else if (upper.isEmpty || current < upper.get) {
               pushChoice(disp)
-              iterate
+              iterate()
             } else
               ip += disp
           case LowerRepeatLoopInst(disp) =>
@@ -645,14 +646,14 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
             pushChoice(disp)
             mark = stack.size
           case MarkStateInst =>
-            pushState
+            pushState()
             mark = stack.size
           case UnmarkInst =>
             stack.discard(stack.size - mark)
-            state
+            state()
           case UnmarkSameDataInst =>
             stack.discard(stack.size - mark)
-            stateSameData
+            stateSameData()
           case ChangeMarkInst(disp) =>
             val ChoicePoint(flags, dat, ptr, _, starts, captures, frm, mrk, ps, rt, action) = stack(
               stack.size - mark + 1)
@@ -661,10 +662,10 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
               ChoicePoint(flags, dat, ptr, ip + disp, starts, captures, frm, mrk, ps, rt, action)
           case ClassInst(clas) =>
             if (!eoi && !clas(current))
-              fail
+              fail()
           case ClassReverseInst(clas) =>
             if (!boi && !clas(previous))
-              fail
+              fail()
           case CaptureBeginInst(parm, n) =>
             starts += (parm -> index)
 
@@ -689,27 +690,27 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
             captures += (parm -> (start, index, obj))
           case AdvanceInst =>
             if (eoi)
-              fail
+              fail()
             else
-              advance
+              advance()
           case ReverseInst =>
             if (boi)
-              fail
+              fail()
             else
-              reverse
+              reverse()
           case DotInst =>
             if (!eoi && dot)
-              advance
+              advance()
             else
-              fail
+              fail()
           case DotReverseInst =>
             if (boi)
-              fail
+              fail()
             else {
-              reverse
+              reverse()
 
               if (!dot)
-                fail
+                fail()
             }
           case BranchInst(disp) => ip += disp
           case ZeroLengthInst   => push(pop.asInstanceOf[Pointer].p == ptr)
@@ -733,20 +734,20 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
           case RestorePositionInst => ptr = pop.asInstanceOf[Pointer].p
           case PushMatchedInst =>
             push(subsequence(pop.asInstanceOf[Pointer].p))
-          case PushCaptureGroups => push(captures)
-          case PushCaptureGroupsStrings =>
+          case PushCaptureGroupsInst => push(captures)
+          case PushCaptureGroupsStringsInst =>
             push(captures map {
               case (k, (_, _, c)) =>
                 (k, if (c.isInstanceOf[CharSequence]) c.toString else c)
             })
           case BeginningPositionMatchInst =>
             if (!boi)
-              fail
+              fail()
           case EndPositionMatchInst =>
             if (!eoi)
-              fail
-          case FailInst         => fail
-          case FailIfFalseInst  => if (dereft == false) fail
+              fail()
+          case FailInst         => fail()
+          case FailIfFalseInst  => if (dereft == false) fail()
           case SaveFlagsInst    => push(Flags(flags))
           case RestoreFlagsInst => flags = pop.asInstanceOf[Flags].f
           case SetFlagsInst(setmask, clearmask) =>
@@ -816,36 +817,36 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
           case BindingInst  => bindings += derefp
           case MatchBindingInst(idx) =>
             if (bindings(idx) != derefp)
-              fail
-          case TypeCheckInst(struc, tpos) =>
+              fail()
+          case TypeCheckInst(struc, _) =>
             struc match {
               case TupleStructureAST(_, l) =>
                 val arity = l.length
 
                 dereft match {
                   case t: Tuple if t.arity == arity =>
-                  case t: Tuple =>
-                    fail //problem( tpos, s"arity mismatch: expected arity of $arity, but actual arity was ${t.arity}" )
-                  case o =>
-                    fail //problem( tpos, s"type mismatch: expected tuple of arity $arity: $o" )
+                  case _: Tuple =>
+                    fail() //problem( tpos, s"arity mismatch: expected arity of $arity, but actual arity was ${t.arity}" )
+                  case _ =>
+                    fail() //problem( tpos, s"type mismatch: expected tuple of arity $arity: $o" )
                 }
               case NilStructureAST =>
                 dereft match {
                   case s: Seq[_] if s.isEmpty =>
                   case _ =>
-                    fail //problem( tpos, "expected a non-empty sequence" )
+                    fail() //problem( tpos, "expected a non-empty sequence" )
                 }
               case ConsStructureAST(_, _, _) | ListStructureAST(_, _) =>
                 dereft match {
                   case s: Seq[_] if s.nonEmpty =>
                   case _ =>
-                    fail //problem( tpos, "expected a non-empty sequence" )
+                    fail() //problem( tpos, "expected a non-empty sequence" )
                 }
               case RecordStructureAST(_, name, args) =>
                 dereft match {
                   case r: Record if r.name == name && r.arity == args.length =>
                   case _ =>
-                    fail //problem( tpos, s"expected a record: '$name'" )//todo: fail with reason???
+                    fail() //problem( tpos, s"expected a record: '$name'" )//todo: fail with reason???
                 }
               case _ =>
             }
@@ -875,7 +876,7 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
             val rhs = for (_ <- 1 to len) yield derefp
             val lhs = for (_ <- 1 to len) yield pop
 
-            def assignment: Unit = {
+            def assignment(): Unit = {
               var res: Any = null
 
               for (i <- len - 1 to 0 by -1)
@@ -892,18 +893,18 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
                     case o => problem(lpos(i), s"not an l-value: $o")
                   } else
                   (op, deref(lhs(i))) match {
-                    case (Symbol("-"), s: Shrinkable[_]) =>
-                      s.asInstanceOf[Shrinkable[Any]] -= rhs(i)
+                    case (Symbol("-"), s: mutable.Shrinkable[_]) =>
+                      s.asInstanceOf[mutable.Shrinkable[Any]] -= rhs(i)
                       res = s
-                    case (Symbol("--"), s: Shrinkable[_]) =>
-                      s.asInstanceOf[Shrinkable[Any]] --= rhs(i)
+                    case (Symbol("--"), s: mutable.Shrinkable[_]) =>
+                      s.asInstanceOf[mutable.Shrinkable[Any]] --= rhs(i)
                         .asInstanceOf[IterableOnce[Any]]
                       res = s
-                    case (Symbol("+"), g: Growable[_]) =>
-                      g.asInstanceOf[Growable[Any]] += rhs(i)
+                    case (Symbol("+"), g: mutable.Growable[_]) =>
+                      g.asInstanceOf[mutable.Growable[Any]] += rhs(i)
                       res = g
-                    case (Symbol("++"), g: Growable[_]) =>
-                      g.asInstanceOf[Growable[Any]] ++= rhs(i)
+                    case (Symbol("++"), g: mutable.Growable[_]) =>
+                      g.asInstanceOf[mutable.Growable[Any]] ++= rhs(i)
                         .asInstanceOf[IterableOnce[Any]]
                       res = g
                     case _ =>
@@ -924,21 +925,21 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
                               if (Math.predicate(func, n, rhs(i)))
                                 l.value = rhs(i)
                               else {
-                                fail
+                                fail()
                                 return
                               }
                             case (Symbol("<:"), s: String) =>
                               if (s < String.valueOf(rhs(i)))
                                 l.value = rhs(i)
                               else {
-                                fail
+                                fail()
                                 return
                               }
                             case (Symbol(">:"), s: String) =>
                               if (s > String.valueOf(rhs(i)))
                                 l.value = rhs(i)
                               else {
-                                fail
+                                fail()
                                 return
                               }
                             case (_, n: Number) =>
@@ -958,7 +959,7 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
               push(res)
             }
 
-            assignment
+            assignment()
           case UnaryInst(op, func, pos) =>
             val v = pop
             val d = deref(v)
@@ -989,7 +990,7 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
                 pop
                 push(g.it.next())
               } else
-                fail
+                fail()
             }
 
             derefp match {
@@ -1154,58 +1155,58 @@ class VM(code: Compilation, captureTrees: ArraySeq[Node], scan: Boolean, anchore
       } else if (ip > code.length)
         sys.error(s"ip > code.length: $ip")
       else if (anchored && !eoi) {
-        fail
+        fail()
       } else
         return
     }
   }
 
-  def execute = {
+  def execute: Any = {
     reset("", 0, Nil)
-    run
+    run()
 
     if (data nonEmpty) data.head else ()
   }
 
-  def global(idx: Int) = globals(idx)
+  def global(idx: Int): Any = globals(idx)
 
-  def call(callable: Any, args: List[Any]) = {
+  def call(callable: Any, args: List[Any]): Any = {
     reset("", HALT, args)
 
     val argc = args.length
 
     callIndirect(callable, null, null, List.fill(argc)(null), argc)
-    run
+    run()
     data.head
   }
 
-  def call(entry: Int, args: List[Any]) = {
+  def call(entry: Int, args: List[Any]): Any = {
     reset("", entry, args)
-    run
+    run()
     data.head
   }
 
-  def matches(subject: CharSequence) = {
+  def matches(subject: CharSequence): Boolean = {
     reset(subject, 0, Nil)
-    pushMatchFailChoice
-    run
+    pushMatchFailChoice()
+    run()
     ip >= 0
   }
 
-  def rematches =
+  def rematches: Boolean =
     if (ip >= 0) {
       if (trace)
         println("--- rematch ---")
 
-      fail
-      run
+      fail()
+      run()
       ip >= 0
     } else
       false
 
-  def groups = captures
+  def groups: Map[String, (Int, Int, Any)] = captures
 
-  override def toString = {
+  override def toString: String = {
     val inst =
       if (ip >= code.length)
         "end-of-code"
@@ -1267,7 +1268,7 @@ case class RightSectionOperation(op: Symbol, func: FunctionMap, rpos: Position, 
 case class NativeMethod(o: Any, m: List[Method])
 
 case class RecordConstructor(typename: String, name: String, fields: List[Symbol]) {
-  val arity = fields.length
+  val arity: Int = fields.length
   val symbolMap = Map(fields zipWithIndex: _*)
   val stringMap = Map(fields map (_.name) zipWithIndex: _*)
 }
@@ -1295,18 +1296,17 @@ trait TupleLike extends Iterable[Any] {
 
 class Record(val name: String, elems: IndexedSeq[Any], val symbolMap: Map[Symbol, Int], val stringMap: Map[String, Int])
     extends TupleLike {
-  val arity = elems.length
+  val arity: Int = elems.length
 
-  def element(idx: Int) = elems(idx)
+  def element(idx: Int): Any = elems(idx)
 
-  override def toString =
-    if (arity == 0) name else s"$name( ${elems mkString ", "} )"
+  override def toString: String = if (arity == 0) name else s"$name( ${elems mkString ", "} )"
 }
 
 class Tuple(elems: IndexedSeq[Any]) extends TupleLike {
-  val arity = elems.length
+  val arity: Int = elems.length
 
-  def element(idx: Int) = elems(idx)
+  def element(idx: Int): Any = elems(idx)
 
   override def toString = s"(${elems mkString ", "})"
 }
@@ -1423,5 +1423,5 @@ case object ToListInst extends VMInst
 case object ToSetInst extends VMInst
 case class BracketInst(epos: Position, apos: Position) extends VMInst
 case object PushMatchedInst extends VMInst
-case object PushCaptureGroups extends VMInst
-case object PushCaptureGroupsStrings extends VMInst
+case object PushCaptureGroupsInst extends VMInst
+case object PushCaptureGroupsStringsInst extends VMInst

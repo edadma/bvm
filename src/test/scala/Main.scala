@@ -18,6 +18,10 @@ object Main extends App {
       }
     )
 
+  val regex = PatternParser.parseRegexWithResult("(a)(b)").getOrElse(sys.error("regex error"))
+
+  println(regex)
+
   val program =
     SourceAST(
       List(
@@ -25,13 +29,9 @@ object Main extends App {
           null,
           VariableExpressionAST(null, "write", "write"),
           null,
-          List(
-            (null,
-             ScanExpressionAST(null, LiteralExpressionAST("asdf"), MatchExpressionAST(LiteralExpressionAST("a")))),
-          ),
-          false
+          List((null, ScanExpressionAST(null, LiteralExpressionAST("asdf"), PatternExpressionAST(regex)))),
+          tailrecursive = false
         )
-        //, AssignmentExpressionAST( List((null, VariableExpressionAST(null, "a", "a"))), '=, null, List((null, LiteralExpressionAST( "bye bye again" ))) )
       ))
 
   run(program, constants, Map(), Map(), null)

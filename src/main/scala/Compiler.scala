@@ -1303,13 +1303,13 @@ class Compiler(constants: Map[String, Any],
           code += BracketInst(epos, apos)
         case PatternExpressionAST(pat) =>
           _emit(pat)
-          code += PushCaptureGroups
+          code += PushCaptureGroupsInst
         case PatternExpressionStringsAST(pat) =>
           _emit(pat)
-          code += PushCaptureGroupsStrings
+          code += PushCaptureGroupsStringsInst
         case NativeFunctionExpressionAST(function) => code += PushFunctionInst(function)
         //				case c: StatementAST => //sys.error( s"missed a case: $c" )
-        case CaptureGroupsExpressionAST                => code += PushCaptureGroups
+        case CaptureGroupsExpressionAST                => code += PushCaptureGroupsInst
         case _: StructureAST                           =>
         case t if emitExtension isDefinedAt (t, _emit) => emitExtension(t, _emit)
       }
@@ -1557,6 +1557,7 @@ class Compiler(constants: Map[String, Any],
   def compile(ast: AST) = {
     val captureTrees = { //todo: needs to be done differently to support regex macro expressions
       var count = 0
+      var level = 0
       var map = TreeMap[Int, Node]()
 
       def _numberCaptureGroups(pat: AST, buf: ArrayBuffer[Node]): Unit = {

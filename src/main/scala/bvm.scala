@@ -13,24 +13,24 @@ package object bvm {
   type NativeFunction = (_, _, _, _) => _
   type cset = Char => Boolean
 
-  val DIGIT_CLASS = (_: Char).isDigit
+  val DIGIT_CLASS: Char => Boolean = (_: Char).isDigit
   val HEXDIGIT_CLASS = new CSet(DIGIT_CLASS, 'a' to 'f', 'A' to 'F')
-  val LETTER_CLASS = (_: Char).isLetter
+  val LETTER_CLASS: Char => Boolean = (_: Char).isLetter
   val ALPHANUM_CLASS = new CSet(LETTER_CLASS, DIGIT_CLASS)
   val WORD_CLASS = new CSet(ALPHANUM_CLASS, (_: Char) == '_')
-  val NONWORD_CLASS = new CSet(unionOf(ALPHANUM_CLASS, (_: Char) == '_')).complement
-  val WHITESPACE_CLASS = " \t\r\u000B\n".toSet
+  val NONWORD_CLASS: Char => Boolean = new CSet(unionOf(ALPHANUM_CLASS, (_: Char) == '_')).complement
+  val WHITESPACE_CLASS: Set[Char] = " \t\r\u000B\n".toSet
   val HORIZONTAL_WHITESPACE_CLASS = new CSet('\u2000' to '\u200a', "\t\u00A0\u1680\u180e\u202f\u205f\u3000")
-  val VERTICAL_WHITESPACE_CLASS = "\n\u000B\f\r\u0085\u2028\u2029".toSet
-  val TERMINATOR_CLASS = "\u000A\u000B\u000C\u000D\u0085\u2028\u2029".toSet
+  val VERTICAL_WHITESPACE_CLASS: Set[Char] = "\n\u000B\f\r\u0085\u2028\u2029".toSet
+  val TERMINATOR_CLASS: Set[Char] = "\u000A\u000B\u000C\u000D\u0085\u2028\u2029".toSet
 
-  val LineBreakPattern = Pattern.compiledSubpattern(
+  val LineBreakPattern: PatternAST = Pattern.compiledSubpattern(
     FlagConditionalPattern(
       UNIX_LINES,
       StringPattern(LiteralExpressionAST("\n")),
       AlternationPattern(List(StringPattern(LiteralExpressionAST("\r\n")), ClassPattern(TERMINATOR_CLASS)))
     ))
-  val BeginningOfLinePattern = Pattern.compiledSubpattern(
+  val BeginningOfLinePattern: PatternAST = Pattern.compiledSubpattern(
     FlagConditionalPattern(
       MULTILINE,
       AlternationPattern(List(
@@ -38,15 +38,15 @@ package object bvm {
         BeginningOfInputPattern)),
       BeginningOfInputPattern
     ))
-  val EndOfLinePattern = Pattern.compiledSubpattern(
+  val EndOfLinePattern: PatternAST = Pattern.compiledSubpattern(
     FlagConditionalPattern(MULTILINE,
                            LookaheadPattern(AlternationPattern(List(LineBreakPattern, EndOfInputPattern))),
                            EndOfInputPattern))
-  val EndOfInputBeforeFinalTerminatorPattern = Pattern.compiledSubpattern(
+  val EndOfInputBeforeFinalTerminatorPattern: PatternAST = Pattern.compiledSubpattern(
     LookaheadPattern(ConcatenationPattern(List(OptionalPattern(LineBreakPattern), EndOfInputPattern))))
-  val NonEmptyInputPattern =
+  val NonEmptyInputPattern: PatternAST =
     Pattern.compiledSubpattern(NegationPattern(ConcatenationPattern(List(BeginningOfInputPattern, EndOfInputPattern))))
-  val WordBoundaryPattern = Pattern.compiledSubpattern(
+  val WordBoundaryPattern: PatternAST = Pattern.compiledSubpattern(
     AlternationPattern(
       List(
         ConcatenationPattern(
@@ -54,10 +54,10 @@ package object bvm {
         ConcatenationPattern(
           List(LookbehindClassPattern(WORD_CLASS), LookaheadClassPattern(NONWORD_CLASS), NonEmptyInputPattern))
       )))
-  val NonWordBoundaryPattern = Pattern.compiledSubpattern(NegationPattern(WordBoundaryPattern))
+  val NonWordBoundaryPattern: PatternAST = Pattern.compiledSubpattern(NegationPattern(WordBoundaryPattern))
 
-  val HEXOCTET = Pattern.compiledSubpattern(ConcatenationPattern(List(ClassPattern(HEXDIGIT_CLASS))))
-  val UUID =
+  val HEXOCTET: PatternAST = Pattern.compiledSubpattern(ConcatenationPattern(List(ClassPattern(HEXDIGIT_CLASS))))
+  val UUID: PatternAST =
     Pattern.compiledSubpattern(
       ConcatenationPattern(
         List(
@@ -71,34 +71,31 @@ package object bvm {
           LiteralPattern("-"),
           hexOctets(6)
         )))
-  val INTEGER = Pattern.compiledSubpattern(OneOrMorePattern(ClassPattern(DIGIT_CLASS)))
-  val HEXINTEGER = Pattern.compiledSubpattern(OneOrMorePattern(ClassPattern(HEXDIGIT_CLASS)))
+  val INTEGER: PatternAST = Pattern.compiledSubpattern(OneOrMorePattern(ClassPattern(DIGIT_CLASS)))
+  val HEXINTEGER: PatternAST = Pattern.compiledSubpattern(OneOrMorePattern(ClassPattern(HEXDIGIT_CLASS)))
 
-  def hexOctets(octets: Int) = RepeatPattern(HEXOCTET, octets, null, Some(octets))
+  def hexOctets(octets: Int): PatternAST = RepeatPattern(HEXOCTET, octets, null, Some(octets))
 
-  def deref(a: Any) =
+  def deref(a: Any): Any =
     a match {
       case a: Assignable => a.value
       case _             => a
     }
 
-  def argsderef(a: Any) =
+  def argsderef(a: Any): Any =
     a match {
       case a: ArgList => ArgList(a.array map deref: _*)
       case _          => deref(a)
     }
 
-  def problem(pos: Position, error: String) =
-    if (pos eq null)
-      sys.error(error)
-    else
-      sys.error(s"${pos.line}: $error\n${pos.longString}")
+  def problem(pos: Position, error: String): Nothing =
+    sys.error(if (pos eq null) error else s"${pos.line}: $error\n${pos.longString}")
 
   def run(ast: AST,
           constants: Map[String, Any],
           sysvars: Map[String, VM => Any],
           macros: Map[String, List[AST] => AST],
-          args: Any*) = {
+          args: Any*): Any = {
     val code = new Compiler(constants, sysvars, macros, comments = true).compile(ast)
     val vm = new VM(code, ArraySeq(), false, false, args)
 
@@ -162,35 +159,32 @@ package object bvm {
       case _ => String.valueOf(a)
     }
 
-  val NUMERIC =
+  val NUMERIC: Numeric[Any] =
     new Numeric[Any] {
       def parseString(str: String): Option[Any] = sys.error("shouldn't call Numeric.parseString()")
 
       def compare(x: Any, y: Any): Int = naturalCompare(x, y)
 
-      def fromInt(x: Int) = Integer.valueOf(x)
+      def fromInt(x: Int): Integer = Integer.valueOf(x)
 
-      def minus(x: Any, y: Any) = Math(Symbol("-"), x, y)
+      def minus(x: Any, y: Any): AnyRef = Math(Symbol("-"), x, y)
 
-      def negate(x: Any) = Math(Symbol("-"), x)
+      def negate(x: Any): AnyRef = Math(Symbol("-"), x)
 
-      def plus(x: Any, y: Any) = Math(Symbol("+"), x, y)
+      def plus(x: Any, y: Any): AnyRef = Math(Symbol("+"), x, y)
 
-      def times(x: Any, y: Any) = Math(Symbol("*"), x, y)
+      def times(x: Any, y: Any): AnyRef = Math(Symbol("*"), x, y)
 
-      def toDouble(x: Any) = x.asInstanceOf[Number].doubleValue
+      def toDouble(x: Any): Double = x.asInstanceOf[Number].doubleValue
 
-      def toFloat(x: Any) = x.asInstanceOf[Number].floatValue
+      def toFloat(x: Any): Float = x.asInstanceOf[Number].floatValue
 
-      def toInt(x: Any) = x.asInstanceOf[Number].intValue
+      def toInt(x: Any): Int = x.asInstanceOf[Number].intValue
 
-      def toLong(x: Any) = x.asInstanceOf[Number].longValue
+      def toLong(x: Any): Long = x.asInstanceOf[Number].longValue
     }
 
-  val ORDERING =
-    new Ordering[Any] {
-      def compare(x: Any, y: Any): Int = naturalCompare(x, y)
-    }
+  val ORDERING: Ordering[Any] = (x: Any, y: Any) => naturalCompare(x, y)
 
   def naturalCompare(x: Any, y: Any): Int =
     (x, y) match {
